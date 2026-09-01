@@ -23,8 +23,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "netinfo.h"
 #include "misc.h"
 
-// [jdsc] tick the animation every 50ms 
-const size_t ANIM_UPDATE_RATE = 50000;
+// [jdsc] tick the animation every 16ms (60Hz)
+const size_t ANIM_UPDATE_RATE = 16667;
 
 enum LightAnimation {
   ANIM_SOLID,

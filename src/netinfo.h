@@ -30,7 +30,7 @@ enum ConnectionStates {
 
 struct NetworkState {
   // [jdsc] this controls the speed of the animation
-  atomic_size_t packetSpeed;
+  _Atomic uint64_t packetSpeed;
 
   // this controls the color of the light and the animState
   _Atomic enum ConnectionStates connectionState;
