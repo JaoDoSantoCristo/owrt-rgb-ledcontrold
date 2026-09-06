@@ -1,4 +1,6 @@
 /*
+=======================================================================
+
 OpenWrt RGB LED control daemon
 Copyright (C) 2026  Jão do Santo Cristo
 
@@ -14,6 +16,14 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+=======================================================================
+
+  misc.h
+
+holds information that doesn't fit elsewhere, like netinfo or rgbled.
+
+=======================================================================
 */
 
 #ifndef MISC_H
@@ -22,9 +32,18 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "netinfo.h"
 #include "rgbled.h"
 
-struct Data {
-  struct NetworkState* netState;
-  struct LedState* ledState;
-};
+// [jdsc] 3 sec
+#define ERROR_RETRY_TIMER 3
+
+typedef struct {
+  networkState_s* netState;
+  ledState_s* ledState;
+} routerContext_s;
+
+typedef enum {
+  R_ERROR = -1, // how tragic...
+  R_A_OK = 0,
+  R_OK_BUT_NOT = 1, // function finished but with bad news
+} funcResult_e;
 
 #endif

@@ -1,4 +1,6 @@
 /*
+=======================================================================
+
 OpenWrt RGB LED control daemon
 Copyright (C) 2026  Jão do Santo Cristo
 
@@ -14,6 +16,14 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+=======================================================================
+
+  rgbled.h/rgbled.c
+
+animate and control the LED
+
+=======================================================================
 */
 
 #ifndef RGBLED_H
@@ -24,17 +34,17 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "misc.h"
 
 // [jdsc] tick the animation every 16ms (60Hz)
-const size_t ANIM_UPDATE_RATE = 16667;
+#define ANIM_UPDATE_RATE 16667
 
-enum LightAnimation {
+typedef enum {
   ANIM_SOLID,
   ANIM_BREATHE,
   // ANIM_BEAT,
   ANIM_FLASH,
   ANIM_PULSE
-};
+} lightAnimation_e;
 
-struct LedState {
+typedef struct {
   uint8_t R;
   uint8_t G;
   uint8_t B;
@@ -42,8 +52,8 @@ struct LedState {
   // [jdsc] not alpha, brightness
   uint8_t A;
 
-  enum LightAnimation animState;
-};
+  lightAnimation_e animState;
+} ledState_s;
 
 static const uint8_t gammaCorrected[256] = {
   0, 21, 28, 34, 39, 43, 46, 50, 53, 56, 58, 61, 63, 66, 68, 70, 72, 74, 76, 

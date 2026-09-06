@@ -1,4 +1,6 @@
 /*
+=======================================================================
+
 OpenWrt RGB LED control daemon
 Copyright (C) 2026  Jão do Santo Cristo
 
@@ -14,6 +16,14 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+=======================================================================
+
+  netinfo.h/netinfo.c
+
+everything related to network adapters and internet connection.
+
+=======================================================================
 */
 
 #ifndef NETINFO_H
@@ -21,19 +31,24 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <stdatomic.h>
 
-enum ConnectionStates {
+// [jdsc] refresh every second
+#define NETWORK_THREAD_TIMER 1
+#define MAX_INTERFACE_RETRIES 5
+
+typedef enum {
   NET_NO_WAN,
   NET_NO_INTERNET,
-  NET_HEALTHY,
-  NET_HIGH_LOAD
-};
+  NET_HEALTHY
+} connectionState_e;
 
-struct NetworkState {
+typedef struct {
   // [jdsc] this controls the speed of the animation
-  _Atomic uint64_t packetSpeed;
+  _Atomic uint64_t bpsTrafficSpeed;
 
   // this controls the color of the light and the animState
-  _Atomic enum ConnectionStates connectionState;
-};
+  _Atomic connectionState_e connectionState;
+} networkState_s;
+
+void* net_thread( void* arg );
 
 #endif

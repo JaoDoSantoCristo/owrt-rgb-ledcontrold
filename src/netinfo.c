@@ -25,21 +25,18 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "netinfo.h"
 #include "misc.h"
 
-int read_rx_or_tx_counter( char* path, uint64_t* result )
+static funcResult_e local_read_rx_or_tx_counter( char* path, uint64_t* result )
 {
   int fileDescriptor = open( path, O_RDONLY );
-  if( fileDescriptor == -1 )
-    return -1;
+  if ( fileDescriptor == -1 )
+    return R_ERROR;
   
   char buffer[64];
 
   ssize_t fRead = read( fileDescriptor, buffer, sizeof( buffer ) - 1 );
-  if( fRead <= 0 ) {
-    close( fileDescriptor );
-    return -1;
-  }
-
   close( fileDescriptor );
+  if ( fRead <= 0 )
+      return R_ERROR;
 
   buffer[fRead] = '\0';
 
@@ -49,80 +46,82 @@ int read_rx_or_tx_counter( char* path, uint64_t* result )
   
   uint64_t num = ( uint64_t )strtoull( buffer, &endptr, 10 );
 
-  if( errno != 0 || endptr == buffer )
-    return -1;
+  if ( errno != 0 || endptr == buffer )
+    return R_ERROR;
 
   * result = num;
-  return 0;
+  return R_A_OK;
 }
 
-const uint16_t SYSFS_BUFFER_SIZE = 64 + sizeof( "/sys/class/net//statistics/rx_bytes" ) + 1;
+static const uint64_t SYSFS_BUFFER_SIZE = UNIX_MAX_DEV_NAME_SIZE + sizeof( "/sys/class/net//statistics/rx_bytes" ) + 1;
 
-int init_wan_dev( char* rxPath, char* txPath ) 
+static funcResult_e local_init_interface( char* rxPath, char* txPath ) 
 {
-  char devBuffer[64] = {0};
-  if( find_wan_device( devBuffer ) != 0 ) {
-    printf("Fatal error looking for WAN dev name!\n");
-    return -1;
+  char devBuffer[UNIX_MAX_DEV_NAME_SIZE] = {0};
+
+  // TODO: ADD FUNCTION TO MANUALLY SPECIFY INTERFACE
+  if ( find_wan_device( devBuffer, sizeof( devBuffer ) ) != R_A_OK ) {
+    printf( "Fatal error looking for WAN device name!\n" );
+    return R_ERROR;
   }
 
   snprintf( rxPath, SYSFS_BUFFER_SIZE, "/sys/class/net/%s/statistics/rx_bytes", devBuffer );
   snprintf( txPath, SYSFS_BUFFER_SIZE, "/sys/class/net/%s/statistics/tx_bytes", devBuffer );
-  return 0;
+  return R_A_OK;
 }
 
 void* net_thread( void* arg )
 {
-  struct Data* data = ( struct Data* )arg;
+  routerContext_s* rCtx = ( routerContext_s* )arg;
 
   char sysfsRxPath[SYSFS_BUFFER_SIZE];
   char sysfsTxPath[SYSFS_BUFFER_SIZE];
 
-  uint8_t retryCount = 0;
-  while( init_wan_dev( sysfsRxPath, sysfsTxPath ) != 0 ) {
-    if( retryCount > 5 )
-      return 0;
-      
-    printf( "Couldn't open WAN device info, trying to reinitialize...\n");
-    sleep( 3 );
+  for ( int retryCount = 0; retryCount <= MAX_INTERFACE_RETRIES; ++retryCount ) {
+    if ( local_init_interface( sysfsRxPath, sysfsTxPath ) == R_A_OK )
+      break;
 
-    ++retryCount;
+    if ( retryCount >= MAX_INTERFACE_RETRIES ) {
+      printf( "Reached retry limit, exiting.");
+      pthread_exit( NULL );
+    }
+  
+    printf( "Couldn't open WAN interface info, trying to reinitialize...\n" );
+    sleep( ERROR_RETRY_TIMER );
+    continue;
   }
-  retryCount = 0;
   
-  uint64_t rxPackets1 = 0;
-  uint64_t txPackets1 = 0;
+  uint64_t rxBytes1 = 0;
+  uint64_t txBytes1 = 0;
   
-  uint64_t rxPackets2 = 0;
-  uint64_t txPackets2 = 0;
+  uint64_t rxBytes2 = 0;
+  uint64_t txBytes2 = 0;
 
-  uint64_t packetDelta = 0;
+  uint64_t byteTrafficDelta = 0;
 
-  while( 1 ) {
-    if( read_rx_or_tx_counter( sysfsRxPath, &rxPackets2 ) != 0 )
-    {
-      printf( "Error reading WAN Rx sysfs counter\n" );
+  while ( 1 ) {
+    if ( local_read_rx_or_tx_counter( sysfsRxPath, &rxBytes2 ) != R_A_OK ) {
+      printf( "Error reading interface Rx sysfs counter\n" );
       pthread_exit( NULL );
     }
 
-    if( read_rx_or_tx_counter( sysfsTxPath, &txPackets2 ) != 0 )
-    {
-      printf( "Error reading WAN Tx sysfs counter\n" );
+    if ( local_read_rx_or_tx_counter( sysfsTxPath, &txBytes2 ) != R_A_OK ) {
+      printf( "Error reading interface Tx sysfs counter\n" );
       pthread_exit( NULL );
     }
 
     // [jdsc] using this it's possible to get an overall idea of how much data
-    // the router is transferring. rxPackets uses the Linux kernel tracker
+    // the router is transferring. rxBytes uses the Linux kernel tracker
     // for tx/rx on a network interface, they're cumulative so it will not
     // cause a negative underflow, and if the counter overflows it wraps safely
-    packetDelta = ( rxPackets2 - rxPackets1 ) + ( txPackets2 - txPackets1 );
-    atomic_store( &data->netState->packetSpeed, packetDelta );
+    byteTrafficDelta = ( rxBytes2 - rxBytes1 ) + ( txBytes2 - txBytes1 );
+    atomic_store( &rCtx->netState->bpsTrafficSpeed, byteTrafficDelta );
 
-    rxPackets1 = rxPackets2;
-    txPackets1 = txPackets2;
+    rxBytes1 = rxBytes2;
+    txBytes1 = txBytes2;
 
-    sleep( 1 );
+    sleep( NETWORK_THREAD_TIMER );
   }
 
-  return 0;
+  return NULL;
 }

@@ -1,4 +1,6 @@
 /*
+=======================================================================
+
 OpenWrt RGB LED control daemon
 Copyright (C) 2026  Jão do Santo Cristo
 
@@ -14,6 +16,12 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+=======================================================================
+
+main.c
+
+=======================================================================
 */
 
 #include <stdint.h>
@@ -24,18 +32,18 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "misc.h"
 
 // update stats every 3 seconds
-const size_t STAT_UPDATE_RATE = 3000000;
+#define STAT_UPDATE_RATE 3
 
 int main() {
   pthread_t networkThread;
   pthread_t ledThread;
 
-  struct NetworkState netState = {
-    .packetSpeed = 0,
+  networkState_s netState = {
+    .bpsPacketSpeed = 0,
     .connectionState = NET_NO_WAN
   };
   
-  struct LedState ledState = {
+  ledState_s ledState = {
     .R = 255,
     .G = 255,
     .B = 255,
@@ -43,13 +51,13 @@ int main() {
     .animState = ANIM_SOLID
   };
 
-  struct Data data = {
+  routerContext_s rCtx = {
     .netState = &netState,
     .ledState = &ledState
   };
 
-  pthread_create( &networkThread, NULL, net_thread, &data );
-  pthread_create( &ledThread, NULL, anim_thread, &data );
+  pthread_create( &networkThread, NULL, net_thread, &rCtx );
+  pthread_create( &ledThread, NULL, anim_thread, &rCtx );
 
   pthread_setname_np( networkThread, "network" );
   pthread_setname_np( ledThread, "led" );

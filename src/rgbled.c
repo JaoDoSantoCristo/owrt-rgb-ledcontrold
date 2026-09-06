@@ -16,36 +16,23 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+#include <fcntl.h>
 #include <unistd.h>
+#include <stdio.h>
 #include "rgbled.h"
+#include "netinfo.h"
 
-static inline uint16_t QuadraticEaseOut( uint16_t progress )
+static inline uint16_t local_quadratic_ease_out( uint16_t progress )
 {
   uint32_t inverse = 65535 - progress;
   return 65535 - ( ( inverse * inverse ) >> 16 );
 }
 
-/*
-static inline uint16_t QuadraticEaseIn( uint16_t progress )
+static inline uint16_t local_spline_wave( uint16_t progress )
 {
-  return ( ( uint32_t )progress * progress ) >> 16;
-}
-
-
-static inline uint16_t TriangleWave( uint16_t progress ) 
-{
-  if( progress < 32768 )
-    return progress << 1;
-  else
-    return ( 65535 - progress ) << 1;
-}
-*/
-
-static inline uint16_t SplineWave( uint16_t progress )
-{
-  if( progress < 32768 )
+  if ( progress < 32768 ) {
     return ( ( uint32_t )progress * progress ) >> 15;
-  else {
+  } else {
     uint32_t inverse = 65535 - progress;
     return 65535 - ( ( inverse * inverse ) >> 15 );
   }
@@ -53,65 +40,77 @@ static inline uint16_t SplineWave( uint16_t progress )
 
 void* anim_thread( void* arg )
 {
-  struct Data* data = ( struct Data* )arg;
+  routerContext_s* rCtx = ( routerContext_s* )arg;
   uint16_t animPhase = 0;
+  // xxx xxx xxx + NUL = 12 chars
+  char multiIntensityBuffer[12] = {0};
+
+  int ledFileDescriptor = open( "/sys/class/led/rgb:status/multi_intensity", O_WRONLY );
   
-  while( 1 ) {
+  while ( 1 ) {
     animPhase += 32;
 
-    switch( atomic_load( &data->netState->connectionState ) ) {
+    switch ( atomic_load( &rCtx->netState->connectionState ) ) {
       case NET_NO_WAN:
-        data->ledState->animState = ANIM_FLASH;
-        data->ledState->R = 255;
-        data->ledState->G = 0;
-        data->ledState->B = 0;
+        rCtx->ledState->animState = ANIM_FLASH;
+        rCtx->ledState->R = 255;
+        rCtx->ledState->G = 0;
+        rCtx->ledState->B = 0;
         break;
 
       case NET_NO_INTERNET:
-        data->ledState->animState = ANIM_PULSE;
-        data->ledState->R = 255;
-        data->ledState->G = 104;
-        data->ledState->B = 3;
+        rCtx->ledState->animState = ANIM_PULSE;
+        rCtx->ledState->R = 255;
+        rCtx->ledState->G = 104;
+        rCtx->ledState->B = 3;
         break;
 
       case NET_HEALTHY:
-        data->ledState->animState = ANIM_BREATHE;
-        data->ledState->R = 18;
-        data->ledState->G = 255;
-        data->ledState->B = 144;
+        rCtx->ledState->animState = ANIM_BREATHE;
+        rCtx->ledState->R = 18;
+        rCtx->ledState->G = 255;
+        rCtx->ledState->B = 144;
         break;
 
-      case NET_HIGH_LOAD:
-        data->ledState->animState = ANIM_BREATHE;
-        data->ledState->R = 251;
-        data->ledState->G = 255;
-        data->ledState->B = 18;
-        break;
+      /*case NET_HIGH_LOAD:
+        rCtx->ledState->animState = ANIM_BREATHE;
+        rCtx->ledState->R = 251;
+        rCtx->ledState->G = 255;
+        rCtx->ledState->B = 18;
+        break;*/
     }
     
     // [jdsc] update the animation:
-    switch( data->ledState->animState ) {
+    switch ( rCtx->ledState->animState ) {
       case ANIM_SOLID:
-        data->ledState->A = 255;
+        rCtx->ledState->A = 255;
         break;
 
       case ANIM_BREATHE:
-        data->ledState->A = SplineWave( animPhase ) >> 8;
+        rCtx->ledState->A = local_spline_wave( animPhase ) >> 8;
         break;
         
       case ANIM_PULSE:
-        data->ledState->A = QuadraticEaseOut( 65535 - animPhase ) >> 8;
+        rCtx->ledState->A = local_quadratic_ease_out( 65535 - animPhase ) >> 8;
         break;
 
       // case ANIM_BEAT:
 
       case ANIM_FLASH:
-        if( animPhase < 32768 )
-          data->ledState->A = 255;
+        if ( animPhase < 32768 )
+          rCtx->ledState->A = 255;
         else
-          data->ledState->A = 32;
+          rCtx->ledState->A = 32;
         break;
     }
+
+    size_t len = snprintf( multiIntensityBuffer, sizeof( multiIntensityBuffer ), 
+      "%i %i %i", 
+      rCtx->ledState->R, rCtx->ledState->G, rCtx->ledState->B );
+
+    // multiIntensityBuffer[sizeof( multiIntensityBuffer ) - 1] = '\0';
+
+    write( ledFileDescriptor, multiIntensityBuffer, len );
     
     usleep( ANIM_UPDATE_RATE );
   }

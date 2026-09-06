@@ -1,9 +1,29 @@
-#ifndef __UBUSHIT_H
-#define __UBUSHIT_H
+/*
+OpenWrt RGB LED control daemon
+Copyright (C) 2026  Jão do Santo Cristo
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+#ifndef UBUSHIT_H
+#define UBUSHIT_H
 
 #include "libubus.h"
 #include "libubox/blobmsg_json.h"
 
-int find_wan_device( char* buffer );
+#define UNIX_MAX_DEV_NAME_SIZE 16
+
+int find_wan_device( char* buffer, size_t size );
 
 #endif
